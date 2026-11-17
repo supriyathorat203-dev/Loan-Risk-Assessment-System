@@ -1,0 +1,359 @@
+﻿
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# IMPORTANT: Load environment variables before importing database/auth.
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env", override=True)
+
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+import models
+import schemas
+from auth import (
+    create_access_token,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
+from database import Base, engine, get_db
+
+
+app = FastAPI(title="Loan Risk Assessment System API")
+
+# Allow the React/Vite frontend to communicate with the backend.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Create missing database tables without deleting existing data.
+Base.metadata.create_all(bind=engine)
+
+def is_admin(user: models.User) -> bool:
+    return user.role in ("admin", "bank_officer")
+
+
+def calculate_risk(data: schemas.LoanApplicationCreate):
+    score = 0
+
+    # Credit score
+    if data.credit_score < 580:
+        score += 40
+    elif data.credit_score < 670:
+        score += 25
+    elif data.credit_score < 740:
+        score += 10
+
+    # Existing debt compared with annual income
+    debt_ratio = data.existing_debt / data.annual_income
+
+    if debt_ratio > 0.4:
+        score += 25
+    elif debt_ratio > 0.2:
+        score += 10
+
+    # Loan amount compared with annual income
+    loan_ratio = data.loan_amount / data.annual_income
+
+    if loan_ratio > 3:
+        score += 30
+    elif loan_ratio > 1.5:
+        score += 15
+
+    score = min(score, 100)
+
+    if score >= 60:
+        category = "High Risk"
+    elif score >= 30:
+        category = "Medium Risk"
+    else:
+        category = "Low Risk"
+
+    return score, category
+
+
+@app.get("/")
+def home():
+    return {
+        "message": "Loan Risk Assessment System API is running"
+    }
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# -------------------- REGISTER --------------------
+
+@app.post(
+    "/api/register",
+    response_model=schemas.UserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_user(
+    user_data: schemas.UserRegister,
+    db: Session = Depends(get_db),
+):
+    email = str(user_data.email).lower()
+
+    existing_user = db.scalar(
+        select(models.User).where(models.User.email == email)
+    )
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
+
+    user = models.User(
+        email=email,
+        password_hash=hash_password(user_data.password),
+        role="customer",
+    )
+
+    db.add(user)
+
+    try:
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
+
+    return user
+
+
+# -------------------- LOGIN --------------------
+
+@app.post("/api/login")
+def login_user(
+    login_data: schemas.UserLogin,
+    db: Session = Depends(get_db),
+):
+    email = str(login_data.email).lower()
+
+    user = db.scalar(
+        select(models.User).where(models.User.email == email)
+    )
+
+    if user is None or not verify_password(
+        login_data.password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password.",
+        )
+
+    access_token = create_access_token(user.id, user.role)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "role": user.role,
+        },
+    }
+
+
+# -------------------- CURRENT USER --------------------
+
+@app.get(
+    "/api/me",
+    response_model=schemas.UserResponse,
+)
+def get_me(
+    current_user: models.User = Depends(get_current_user),
+):
+    return current_user
+
+
+# -------------------- CREATE APPLICATION --------------------
+
+@app.post(
+    "/api/applications",
+    response_model=schemas.LoanApplicationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_application(
+    application_data: schemas.LoanApplicationCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    risk_score, risk_category = calculate_risk(application_data)
+
+    application = models.LoanApplication(
+        **application_data.model_dump(),
+        user_id=current_user.id,
+        risk_score=risk_score,
+        risk_category=risk_category,
+    )
+
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+
+    return application
+
+
+# -------------------- LIST APPLICATIONS --------------------
+
+@app.get(
+    "/api/applications",
+    response_model=list[schemas.LoanApplicationResponse],
+)
+
+
+def list_applications(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    query = select(models.LoanApplication)
+
+    # Customers see their own applications.
+    # Bank officers can see all applications.
+    if not is_admin(current_user):
+        query = query.where(
+            models.LoanApplication.user_id == current_user.id
+        )
+
+    query = query.order_by(
+        models.LoanApplication.created_at.desc()
+    )
+
+    return list(db.scalars(query).all())
+
+
+# -------------------- GET ONE APPLICATION --------------------
+
+@app.get(
+    "/api/applications/{application_id}",
+    response_model=schemas.LoanApplicationResponse,
+)
+def get_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    application = db.get(
+        models.LoanApplication,
+        application_id,
+    )
+
+    if application is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    if (
+        not is_admin(current_user)
+        and application.user_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot access this application.",
+        )
+
+    return application
+
+
+# -------------------- UPDATE APPLICATION --------------------
+
+@app.put(
+    "/api/applications/{application_id}",
+    response_model=schemas.LoanApplicationResponse,
+)
+def update_application(
+    application_id: int,
+    application_data: schemas.LoanApplicationCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    application = db.get(
+        models.LoanApplication,
+        application_id,
+    )
+
+    if application is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    if (
+        not is_admin(current_user)
+        and application.user_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot update this application.",
+        )
+
+    risk_score, risk_category = calculate_risk(application_data)
+
+    for field, value in application_data.model_dump().items():
+        setattr(application, field, value)
+
+    application.risk_score = risk_score
+    application.risk_category = risk_category
+
+    db.commit()
+    db.refresh(application)
+
+    return application
+
+
+# -------------------- DELETE APPLICATION --------------------
+
+@app.delete("/api/applications/{application_id}")
+def delete_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    application = db.get(
+        models.LoanApplication,
+        application_id,
+    )
+
+    if application is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    if (
+        not is_admin(current_user)
+        and application.user_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot delete this application.",
+        )
+
+    db.delete(application)
+    db.commit()
+
+    return {"message": "Application deleted successfully"}
+
+
