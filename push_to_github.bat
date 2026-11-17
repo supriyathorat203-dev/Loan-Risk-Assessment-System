@@ -16,7 +16,6 @@ if %ERRORLEVEL% neq 0 (
         set "GIT_CMD=C:\Program Files\Git\cmd\git.exe"
     ) else (
         echo [ERROR] Git was not found on your system.
-        echo Please ensure Git is installed or wait for installation to finish.
         pause
         exit /b 1
     )
@@ -25,77 +24,64 @@ if %ERRORLEVEL% neq 0 (
 echo [*] Using Git: "!GIT_CMD!"
 cd /d "%~dp0"
 
-:: 2. Initialize Git repo if needed
-if not exist ".git" (
-    echo [*] Initializing local Git repository (branch: main)...
-    "!GIT_CMD!" init -b main
-) else (
-    echo [*] Existing Git repository detected.
-)
-
-:: 3. Configure Git identity if not set
-"!GIT_CMD!" config user.name >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    "!GIT_CMD!" config user.name "Supriya"
-    "!GIT_CMD!" config user.email "yogitaj2518@gmail.com"
-    echo [*] Configured default user.name and user.email.
-)
-
-:: 4. Ensure .gitignore is staged and effective
-echo [*] Staging all project files...
-"!GIT_CMD!" add .
-
-:: 5. Commit changes
-echo [*] Creating commit...
-"!GIT_CMD!" commit -m "Complete Loan Risk Assessment System: Separated Customer and Admin Portals, Document Verification Desk, Dark/Light Mode, and Underwriting Engine" >nul 2>&1
-
-:: 6. Check existing remote
-for /f "tokens=*" %%a in ('"!GIT_CMD!" remote get-url origin 2^>nul') do set "EXISTING_REMOTE=%%a"
-
-if defined EXISTING_REMOTE (
-    echo [*] Current GitHub Remote: !EXISTING_REMOTE!
-    set /p "CHANGE_REMOTE=Do you want to push to this remote? (Y/N, default Y): "
-    if /i "!CHANGE_REMOTE!"=="N" (
-        set "EXISTING_REMOTE="
-    )
-)
-
-if not defined EXISTING_REMOTE (
-    echo.
-    echo ============================================================
-    echo Please create a new empty repository on GitHub:
-    echo 1. Go to https://github.com/new
-    echo 2. Name your repository (e.g. Loan-Risk-Assessment-System)
-    echo 3. Do NOT check README, .gitignore or license
-    echo 4. Copy the repository URL (e.g. https://github.com/your-username/Loan-Risk-Assessment-System.git)
-    echo ============================================================
-    echo.
-    set /p "REPO_URL=Enter your GitHub Repository URL: "
-    if "!REPO_URL!"=="" (
-        echo [!] No URL provided. Aborting push.
-        pause
-        exit /b 1
-    )
-    "!GIT_CMD!" remote remove origin >nul 2>&1
-    "!GIT_CMD!" remote add origin "!REPO_URL!"
-)
+:: 2. Remote check
+set "TARGET_REPO=https://github.com/yogita2518/Loan-Risk-Assessment-System.git"
+echo [*] Target Repository: !TARGET_REPO!
+"!GIT_CMD!" remote remove origin >nul 2>&1
+"!GIT_CMD!" remote add origin "!TARGET_REPO!"
 
 echo.
-echo [*] Pushing branch 'main' to GitHub...
-"!GIT_CMD!" branch -M main
-"!GIT_CMD!" push -u origin main
+echo ============================================================
+echo GitHub requires authentication to push changes.
+echo.
+echo OPTION A: Enter your GitHub Personal Access Token (PAT) below.
+echo   (To generate one: https://github.com/settings/tokens
+echo    Select: Generate new token (classic) -> check 'repo' box)
+echo.
+echo OPTION B: Press ENTER without typing anything, and Git will
+echo          prompt you for your GitHub username and password/token.
+echo ============================================================
+echo.
+set /p "USER_TOKEN=Enter your GitHub Token (or press ENTER): "
 
-if %ERRORLEVEL% equ 0 (
+if not "!USER_TOKEN!"=="" (
     echo.
-    echo ============================================================
-    echo [SUCCESS] All code has been successfully transferred to GitHub!
-    echo ============================================================
+    echo [*] Pushing with provided token to main branch...
+    "!GIT_CMD!" branch -M main
+    "!GIT_CMD!" push https://!USER_TOKEN!@github.com/yogita2518/Loan-Risk-Assessment-System.git main:main
+    set "PUSH_STATUS=!ERRORLEVEL!"
+    
+    :: Clean up remote to standard HTTPS without saving token in git config
+    "!GIT_CMD!" remote set-url origin "!TARGET_REPO!"
+    
+    if !PUSH_STATUS! equ 0 (
+        echo.
+        echo ============================================================
+        echo [SUCCESS] All code has been successfully pushed to GitHub!
+        echo View your repository: https://github.com/yogita2518/Loan-Risk-Assessment-System
+        echo ============================================================
+    ) else (
+        echo.
+        echo [!] Push failed. Please verify that your token has 'repo' write permissions.
+    )
 ) else (
     echo.
-    echo ============================================================
-    echo [NOTE] If GitHub prompted for sign-in or a personal access token,
-    echo please complete the authentication in your browser or terminal.
-    echo ============================================================
+    echo [*] Pushing to main branch via standard Git authentication...
+    echo (When prompted for Password, paste your GitHub Personal Access Token)
+    "!GIT_CMD!" branch -M main
+    "!GIT_CMD!" push -u origin main
+    
+    if !ERRORLEVEL! equ 0 (
+        echo.
+        echo ============================================================
+        echo [SUCCESS] All code has been successfully pushed to GitHub!
+        echo View your repository: https://github.com/yogita2518/Loan-Risk-Assessment-System
+        echo ============================================================
+    ) else (
+        echo.
+        echo [!] If authentication failed, remember GitHub requires a Personal
+        echo     Access Token instead of your normal account password.
+    )
 )
 
 echo.
