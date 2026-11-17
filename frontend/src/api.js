@@ -163,6 +163,30 @@ export async function register(email, password) {
   return res.data;
 }
 
+export async function verifyOTP(email, otp) {
+  const res = await api.post("/auth/verify-otp", { email, otp });
+  return res.data;
+}
+
+export async function resendOTP(email, purpose = "email_verification") {
+  const res = await api.post("/auth/resend-otp", { email, purpose });
+  return res.data;
+}
+
+export async function forgotPassword(email) {
+  const res = await api.post("/auth/forgot-password", { email });
+  return res.data;
+}
+
+export async function resetPassword(email, otp, newPassword) {
+  const res = await api.post("/auth/reset-password", {
+    email,
+    otp,
+    new_password: newPassword,
+  });
+  return res.data;
+}
+
 export async function getMe() {
   const res = await api.get("/me");
   return res.data;
@@ -259,6 +283,15 @@ export async function updateUserRole(userId, role) {
 
 export async function getUserDashboardSummary() {
   const res = await api.get("/user/dashboard-summary");
+  return res.data;
+}
+
+export async function sendAIChatMessage(message, contextApplicationId = null, history = []) {
+  const res = await api.post("/ai/chat", {
+    message,
+    context_application_id: contextApplicationId,
+    history,
+  });
   return res.data;
 }
 

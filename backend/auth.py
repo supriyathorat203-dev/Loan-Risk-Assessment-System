@@ -112,3 +112,15 @@ def require_bank_officer(
 
 
 require_admin = require_bank_officer
+
+
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+    db: Session = Depends(get_db),
+) -> models.User | None:
+    if not credentials or not credentials.credentials:
+        return None
+    try:
+        return get_current_user_from_token(credentials.credentials, db)
+    except Exception:
+        return None

@@ -9,6 +9,7 @@ import {
   getErrorMessage,
 } from "../../api";
 import DocumentPreviewModal from "../Common/DocumentPreviewModal";
+import AIChatbot from "../Common/AIChatbot";
 
 const DOC_TYPES = [
   { id: "PAN Card", name: "PAN Card (Identity Document)", required: true },
@@ -33,10 +34,15 @@ export default function CustomerDashboard({
   const [docsLoading, setDocsLoading] = useState(false);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [viewDetailsApp, setViewDetailsApp] = useState(null);
+  const [showFloatingChat, setShowFloatingChat] = useState(false);
 
   // Apply Form State
   const initialForm = {
     applicant_name: "",
+    email: currentUser?.email || "",
+    mobile_no: "",
+    aadhaar_no: "",
+    address: "",
     age: "",
     annual_income: "",
     loan_amount: "",
@@ -114,9 +120,29 @@ export default function CustomerDashboard({
     setFormError("");
     setFormSuccess(null);
 
+    // Validate mobile number
+    const cleanMobile = form.mobile_no.replace(/\D/g, "");
+    if (cleanMobile.length !== 10) {
+      setFormError("Please enter a valid 10-digit mobile number.");
+      setFormLoading(false);
+      return;
+    }
+
+    // Validate Aadhaar number
+    const cleanAadhaar = form.aadhaar_no.replace(/\D/g, "");
+    if (cleanAadhaar.length !== 12) {
+      setFormError("Please enter a valid 12-digit Aadhaar number.");
+      setFormLoading(false);
+      return;
+    }
+
     try {
       const payload = {
         applicant_name: form.applicant_name.trim(),
+        email: form.email?.trim() || null,
+        mobile_no: cleanMobile,
+        aadhaar_no: form.aadhaar_no.trim(),
+        address: form.address?.trim() || null,
         age: Number(form.age),
         annual_income: Number(form.annual_income),
         loan_amount: Number(form.loan_amount),
@@ -232,6 +258,7 @@ export default function CustomerDashboard({
             { id: "Upload Documents", label: "Upload Documents", icon: "📁" },
             { id: "Risk Assessment", label: "Risk Assessment", icon: "⚡" },
             { id: "Application Status", label: "Application Status", icon: "🔄" },
+            { id: "AI Assistant", label: "AI Advisor 🤖", icon: "🤖" },
             { id: "Profile", label: "Profile", icon: "👤" },
           ].map((item) => (
             <button
@@ -506,6 +533,68 @@ export default function CustomerDashboard({
                         required
                         minLength={2}
                       />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Email Address</label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={form.email}
+                        onChange={handleFormChange}
+                        placeholder="e.g. rahul.sharma@example.com"
+                        required
+                      />
+                      <small className="field-hint">Sanction letter & notices will be sent here</small>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Mobile Number (10 Digits)</label>
+                      <input
+                        type="tel"
+                        name="mobile_no"
+                        value={form.mobile_no}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                          setForm((prev) => ({ ...prev, mobile_no: val }));
+                        }}
+                        placeholder="e.g. 9876543210"
+                        required
+                        maxLength={10}
+                      />
+                      <small className="field-hint">Primary number for OTP & verification</small>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Aadhaar Number (12 Digits)</label>
+                      <input
+                        type="text"
+                        name="aadhaar_no"
+                        value={form.aadhaar_no}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, "").slice(0, 12);
+                          const formatted = raw.replace(/(\d{4})(?=\d)/g, "$1 ");
+                          setForm((prev) => ({ ...prev, aadhaar_no: formatted }));
+                        }}
+                        placeholder="e.g. 5432 1234 9876"
+                        required
+                        maxLength={14}
+                      />
+                      <small className="field-hint">Used for KYC deduplication & identity</small>
+                    </div>
+
+                    <div className="form-group full-width">
+                      <label>Current Residential Address</label>
+                      <textarea
+                        name="address"
+                        value={form.address}
+                        onChange={handleFormChange}
+                        placeholder="Enter complete residential address with house/flat no., street, city, state and PIN code..."
+                        rows={2}
+                        required
+                        minLength={10}
+                      />
+                      <small className="field-hint">Must match your address proof document</small>
                     </div>
 
                     <div className="form-group">
@@ -1353,7 +1442,29 @@ export default function CustomerDashboard({
           </div>
         )}
 
-        {/* ----------------- 7. PROFILE ----------------- */}
+        {/* ----------------- 7. AI ASSISTANT ----------------- */}
+        {activeMenu === "AI Assistant" && (
+          <div className="tab-pane fade-in">
+            <div className="pane-header">
+              <h2>LoanWise AI Financial Advisor & Problem Solver</h2>
+              <p>
+                Get real-time answers about your application status, solve document rejection issues, calculate custom EMIs, and receive personalized tips to improve your CIBIL rating.
+              </p>
+            </div>
+
+            <div className="card ai-fullscreen-card">
+              <AIChatbot
+                currentUser={currentUser}
+                currentAppId={selectedAppId}
+                applications={applications}
+                mode="embedded"
+                onNavigateTab={(tab) => setActiveMenu(tab)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ----------------- 8. PROFILE ----------------- */}
         {activeMenu === "Profile" && (
           <div className="tab-pane fade-in">
             <div className="pane-header">
@@ -1456,6 +1567,26 @@ export default function CustomerDashboard({
                 </div>
               </div>
 
+              {/* Verified KYC & Contact Strip */}
+              <div className="kyc-details-strip">
+                <div className="kyc-cell">
+                  <span className="kyc-label">Aadhaar Number</span>
+                  <strong>{viewDetailsApp.aadhaar_no || "—"}</strong>
+                </div>
+                <div className="kyc-cell">
+                  <span className="kyc-label">Mobile Number</span>
+                  <strong>{viewDetailsApp.mobile_no ? `+91 ${viewDetailsApp.mobile_no}` : "—"}</strong>
+                </div>
+                <div className="kyc-cell">
+                  <span className="kyc-label">Email ID</span>
+                  <strong>{viewDetailsApp.email || viewDetailsApp.user_email || "—"}</strong>
+                </div>
+                <div className="kyc-cell full-width">
+                  <span className="kyc-label">Residential Address</span>
+                  <strong>{viewDetailsApp.address || "—"}</strong>
+                </div>
+              </div>
+
               {viewDetailsApp.admin_remarks && (
                 <div className="admin-remarks-box">
                   <strong>Admin Remarks:</strong>
@@ -1527,6 +1658,38 @@ export default function CustomerDashboard({
           isAdmin={false}
         />
       )}
+
+      {/* Floating AI Assistant Trigger & Widget */}
+      <div className="ai-floating-widget-wrapper">
+        {showFloatingChat ? (
+          <div className="ai-floating-drawer-backdrop" onClick={() => setShowFloatingChat(false)}>
+            <div className="ai-floating-drawer card" onClick={(e) => e.stopPropagation()}>
+              <AIChatbot
+                currentUser={currentUser}
+                currentAppId={selectedAppId}
+                applications={applications}
+                mode="widget"
+                onClose={() => setShowFloatingChat(false)}
+                onNavigateTab={(tab) => {
+                  setShowFloatingChat(false);
+                  setActiveMenu(tab);
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="ai-floating-launcher-btn"
+            onClick={() => setShowFloatingChat(true)}
+            title="Need Help? Click to Ask LoanWise AI"
+          >
+            <span className="ai-floating-btn-icon">🤖</span>
+            <span className="ai-floating-btn-text">AI Problem Solver</span>
+            <span className="ai-floating-badge-pulse" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

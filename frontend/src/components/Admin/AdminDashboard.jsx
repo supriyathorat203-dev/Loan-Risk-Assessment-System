@@ -1355,6 +1355,26 @@ export default function AdminDashboard({
                 </div>
               </div>
 
+              {/* Applicant KYC & Contact Information */}
+              <div className="kyc-details-strip">
+                <div className="kyc-cell">
+                  <span className="kyc-label">Aadhaar Number</span>
+                  <strong>{selectedApp.aadhaar_no || "—"}</strong>
+                </div>
+                <div className="kyc-cell">
+                  <span className="kyc-label">Mobile Number</span>
+                  <strong>{selectedApp.mobile_no ? `+91 ${selectedApp.mobile_no}` : "—"}</strong>
+                </div>
+                <div className="kyc-cell">
+                  <span className="kyc-label">Email ID</span>
+                  <strong>{selectedApp.email || selectedApp.user_email || "—"}</strong>
+                </div>
+                <div className="kyc-cell full-width">
+                  <span className="kyc-label">Current Address</span>
+                  <strong>{selectedApp.address || "—"}</strong>
+                </div>
+              </div>
+
               {/* Risk Factor Breakdown */}
               <div className="dossier-section">
                 <h4>Automated Risk Factor Analysis</h4>
