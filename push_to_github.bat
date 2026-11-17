@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-title Push LoanWise to GitHub
+title Push LoanWise to Both GitHub Repositories
 echo ============================================================
-echo         LoanWise System - GitHub Deployment Assistant
+echo   LoanWise System - Dual-Repository Deployment Assistant
 echo ============================================================
 echo.
 
@@ -21,68 +21,84 @@ if %ERRORLEVEL% neq 0 (
     )
 )
 
-echo [*] Using Git: "!GIT_CMD!"
 cd /d "%~dp0"
 
-:: 2. Remote check
-set "TARGET_REPO=https://github.com/yogita2518/Loan-Risk-Assessment-System.git"
-echo [*] Target Repository: !TARGET_REPO!
+:: 2. Target Repositories
+set "REPO_YOGITA=https://github.com/yogita2518/Loan-Risk-Assessment-System.git"
+set "REPO_SUPRIYA=https://github.com/supriyathorat203-dev/Loan-Risk-Assessment-System.git"
+
+echo [*] Target 1: !REPO_YOGITA!
+echo [*] Target 2: !REPO_SUPRIYA!
+echo.
+
+:: 3. Configure Git Dual Push Remotes
 "!GIT_CMD!" remote remove origin >nul 2>&1
-"!GIT_CMD!" remote add origin "!TARGET_REPO!"
+"!GIT_CMD!" remote add origin "!REPO_YOGITA!"
+"!GIT_CMD!" remote set-url --add --push origin "!REPO_YOGITA!"
+"!GIT_CMD!" remote set-url --add --push origin "!REPO_SUPRIYA!"
+
+:: 4. Check for unstaged/uncommitted changes
+echo [*] Staging all changes...
+"!GIT_CMD!" add .
+
+"!GIT_CMD!" diff --cached --quiet
+if %ERRORLEVEL% neq 0 (
+    echo [*] New changes detected!
+    set /p "COMMIT_MSG=Enter commit message (Press ENTER for default): "
+    if "!COMMIT_MSG!"=="" (
+        set "COMMIT_MSG=Auto update: %date% %time%"
+    )
+    "!GIT_CMD!" commit -m "!COMMIT_MSG!"
+) else (
+    echo [*] Working tree is already clean.
+)
 
 echo.
 echo ============================================================
-echo GitHub requires authentication to push changes.
-echo.
-echo OPTION A: Enter your GitHub Personal Access Token (PAT) below.
-echo   (To generate one: https://github.com/settings/tokens
-echo    Select: Generate new token (classic) -> check 'repo' box)
-echo.
-echo OPTION B: Press ENTER without typing anything, and Git will
-echo          prompt you for your GitHub username and password/token.
+echo GitHub Authentication for Dual Push:
+echo - If you have a Personal Access Token (PAT), paste it below.
+echo - Or press ENTER to let Git use your saved credentials.
 echo ============================================================
 echo.
 set /p "USER_TOKEN=Enter your GitHub Token (or press ENTER): "
 
+"!GIT_CMD!" branch -M main
+
 if not "!USER_TOKEN!"=="" (
     echo.
-    echo [*] Pushing with provided token to main branch...
-    "!GIT_CMD!" branch -M main
+    echo [*] 1/2 Pushing to yogita2518...
     "!GIT_CMD!" push https://!USER_TOKEN!@github.com/yogita2518/Loan-Risk-Assessment-System.git main:main
-    set "PUSH_STATUS=!ERRORLEVEL!"
-    
-    :: Clean up remote to standard HTTPS without saving token in git config
-    "!GIT_CMD!" remote set-url origin "!TARGET_REPO!"
-    
-    if !PUSH_STATUS! equ 0 (
-        echo.
-        echo ============================================================
-        echo [SUCCESS] All code has been successfully pushed to GitHub!
-        echo View your repository: https://github.com/yogita2518/Loan-Risk-Assessment-System
-        echo ============================================================
+    if !ERRORLEVEL! equ 0 (
+        echo [OK] Successfully pushed to yogita2518!
     ) else (
-        echo.
-        echo [!] Push failed. Please verify that your token has 'repo' write permissions.
+        echo [!] Failed to push to yogita2518.
+    )
+
+    echo.
+    echo [*] 2/2 Pushing to supriyathorat203-dev...
+    "!GIT_CMD!" push https://!USER_TOKEN!@github.com/supriyathorat203-dev/Loan-Risk-Assessment-System.git main:main
+    if !ERRORLEVEL! equ 0 (
+        echo [OK] Successfully pushed to supriyathorat203-dev!
+    ) else (
+        echo [!] Failed to push to supriyathorat203-dev.
     )
 ) else (
     echo.
-    echo [*] Pushing to main branch via standard Git authentication...
-    echo (When prompted for Password, paste your GitHub Personal Access Token)
-    "!GIT_CMD!" branch -M main
-    "!GIT_CMD!" push -u origin main
-    
-    if !ERRORLEVEL! equ 0 (
-        echo.
-        echo ============================================================
-        echo [SUCCESS] All code has been successfully pushed to GitHub!
-        echo View your repository: https://github.com/yogita2518/Loan-Risk-Assessment-System
-        echo ============================================================
-    ) else (
-        echo.
-        echo [!] If authentication failed, remember GitHub requires a Personal
-        echo     Access Token instead of your normal account password.
-    )
+    echo [*] Pushing simultaneously to both repositories...
+    "!GIT_CMD!" push origin main
 )
 
+:: Restore clean origin remote URLs without tokens
+"!GIT_CMD!" remote remove origin >nul 2>&1
+"!GIT_CMD!" remote add origin "!REPO_YOGITA!"
+"!GIT_CMD!" remote set-url --add --push origin "!REPO_YOGITA!"
+"!GIT_CMD!" remote set-url --add --push origin "!REPO_SUPRIYA!"
+
+echo.
+echo ============================================================
+echo [DONE] Dual Push Process Finished!
+echo - Yogita:  https://github.com/yogita2518/Loan-Risk-Assessment-System
+echo - Supriya: https://github.com/supriyathorat203-dev/Loan-Risk-Assessment-System
+echo ============================================================
 echo.
 pause
