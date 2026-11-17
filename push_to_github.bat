@@ -25,7 +25,7 @@ echo [*] Using Git: "!GIT_CMD!"
 cd /d "%~dp0"
 
 :: 2. Remote check
-set "TARGET_REPO=https://github.com/yogita2518/Loan-Risk-Assessment-System.git"
+set "TARGET_REPO=https://github.com/supriyathorat203-dev/Loan-Risk-Assessment-System.git"
 echo [*] Target Repository: !TARGET_REPO!
 "!GIT_CMD!" remote remove origin >nul 2>&1
 "!GIT_CMD!" remote add origin "!TARGET_REPO!"
@@ -48,7 +48,7 @@ if not "!USER_TOKEN!"=="" (
     echo.
     echo [*] Pushing with provided token to main branch...
     "!GIT_CMD!" branch -M main
-    "!GIT_CMD!" push https://!USER_TOKEN!@github.com/yogita2518/Loan-Risk-Assessment-System.git main:main
+    "!GIT_CMD!" push https://!USER_TOKEN!@github.com/supriyathorat203-dev/Loan-Risk-Assessment-System.git main:main
     set "PUSH_STATUS=!ERRORLEVEL!"
     
     :: Clean up remote to standard HTTPS without saving token in git config
@@ -58,7 +58,7 @@ if not "!USER_TOKEN!"=="" (
         echo.
         echo ============================================================
         echo [SUCCESS] All code has been successfully pushed to GitHub!
-        echo View your repository: https://github.com/yogita2518/Loan-Risk-Assessment-System
+        echo View your repository: https://github.com/supriyathorat203-dev/Loan-Risk-Assessment-System
         echo ============================================================
     ) else (
         echo.
@@ -75,7 +75,7 @@ if not "!USER_TOKEN!"=="" (
         echo.
         echo ============================================================
         echo [SUCCESS] All code has been successfully pushed to GitHub!
-        echo View your repository: https://github.com/yogita2518/Loan-Risk-Assessment-System
+        echo View your repository: https://github.com/supriyathorat203-dev/Loan-Risk-Assessment-System
         echo ============================================================
     ) else (
         echo.
